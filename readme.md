@@ -1,4 +1,4 @@
-# A Demo of ArgoCD Deployment
+# A Demo of ArgoCD Deployment(single and multi-cluster)
 
 ## Prerequisite
 
