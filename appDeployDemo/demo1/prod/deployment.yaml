@@ -1,0 +1,20 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: baas-frontend
+  namespace: baas
+spec:
+  selector:
+    matchLabels:
+      app: baas-frontend
+  replicas: 2
+  template:
+    metadata:
+      labels:
+        app: baas-frontend
+    spec:
+      containers:
+      - name: baas-frontend
+        image: jaredxu/baas-frontend:v2
+        ports:
+        - containerPort: 8080
