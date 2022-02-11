@@ -1,4 +1,4 @@
-# A Demo of ArgoCD Deployment(single and multi-cluster)
+# A Demo of ArgoCD Deployment
 
 ## Prerequisite
 
@@ -16,6 +16,13 @@ and switch to the cluster where you want to install argoCD and we call this mana
 kubectl config use-context your_cluster_name
 ```
 
+Should look like:
+```
++-----------------+     +---------------+
+| manager cluster |     |   cluster 2   |
+|                 |     |               |
++-----------------+     +---------------+
+```
 ## App Being Deployed in This Demo
 
 This is a microservice app I wrote a while back but in this demo, I only deploy the frontend to simply things.
@@ -50,6 +57,13 @@ kubectl create namespace argocd
 kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
 ```
 
+Your setup should now look like:
+```
++-----------------+     +---------------+
+| manager cluster |     |   cluster 2   |
+|   argoCD        |     |               |
++-----------------+     +---------------+
+```
 However, if you are curious about the content of install.yaml, you can find it in argoCD/install.yaml
 
 - Expose the Service
@@ -60,6 +74,12 @@ kubectl port-forward svc/argocd-server -n argocd 8080:443
 ```
 
 and you can access the webui now from https://localhost:8080
+
+You can get the initial password with:
+```
+kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d
+```
+Remember to update to your own password after login.
 
 ## Step2: App Deploy Folder/Branch Structure
 
@@ -76,10 +96,18 @@ This is a one-off execution, as from now on, the live deployment will be changed
 ```
 kubectl apply -f .\application.yaml
 ```
+Now the setup should look like:
 
+```
++-----------------+     +---------------+
+| manager cluster |     |   cluster 2   |
+|   argoCD        |     |               |
+|   baas-frontend |     |               |
++-----------------+     +---------------+
+```
 ## Step5: Access The App
 
-As I didn't make nodePort service work in Kind, so in this case, we need to expose the pod with:
+As I didn't make nodePort service work in Kind, so in this case, I need to expose the pod with:
 (You need to find out the pod name with `kubectl get pods -n baas`)
 
 ```
@@ -103,7 +131,21 @@ kubectl edit deployment baas-frontend -n baas
 
 You should see nothing changes as everything is synced from the code in github repo.
 
-## Step8: Delete deployment in k8s
+
+## Step8: Introduce Defects and Rollback
+
+### Defects:
+Change the app version from v2 to v3 in appDeployDemo/demo1/dev/deployment and commit the change.
+v3 does not really exist in docker hub so this will cause the error.
+
+### Rollback:
+* First, you should disable the auto-sync on ArgoCD WebUI and rollback to previous version.
+* Seoncd, change the version back to v1 and commit the change.
+
+Rememeber to re-enable auto-sync, it should be good now in ArgoCD and synced to the latest good commit/version.
+
+
+## Step9: Delete deployment in k8s
 
 Run the following to delete the deployment:
 
@@ -111,41 +153,41 @@ Run the following to delete the deployment:
 kubectl delete -f .\application.yaml
 ```
 
-## Step9: ArgoCD manage deployment to 2 clusters(Demo2):
-
-Assume that we've already got 2 clusters running:
-
-```
-kubectl config get-contexts
-```
-
-and let's make sure we are using our management cluster where argoCD is installed:
-
-```
-kubectl config use-context kind-kind-jared
-```
-
 ## Step10: Deploy app to 2 clusters using the demo1 folder structure(Demo2) with ArgoCD applicationSet.
 
-make sure nothing is in namespace `baas` and run:
+The ApplicationSet controller is not installed by default, a new ApplicationSet Custom Resource (CR) should be installed:
+```
+kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/applicationset/master/manifests/install.yaml
+```
+
+Make sure resource in namespace `baas` is already purged and run:
 
 ```
 kubectl apply -f .\applicationSetDemo1.yaml
 ```
 
-and you should see 2 deployment tab displayed on argoCD main page.
-delete with command:
+and you should see 2 deployment card displayed on argoCD main page.
 
+Now the setup should look like:
+
+```
++----------------------+     +--------------------+
+| manager cluster(dev) |     |   cluster(prod) 2  |
+|   argoCD             |     |                    |
+|   baas-frontend:v1   |     |   baas-frontend:v2 |
++----------------------+     +--------------------+
+```
+
+Take a look at the applicationSetDemo1.yaml and pay attention to the template.
+ArgoCD is managing deployment over multiple clusters this way.
+However, in this demo, there are many boilerplate code in the manifest.
+Let's delete the resource with command for now:
 ```
 kubectl delete -f .\applicationSetDemo1.yaml
 ```
 
-However, there are many boilerplate code in the manifest.
-
 ## Step11: Improve with Kustomize(Demo2)
-
-Look at what kustomize builds your base resource:
-
+Now look at how kustomize builds your base resource:
 ```
 kustomize build .\appDeployDemo\demo2\base\
 ```
